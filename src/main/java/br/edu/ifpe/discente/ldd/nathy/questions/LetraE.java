@@ -1,89 +1,129 @@
 package br.edu.ifpe.discente.ldd.nathy.questions;
 
-import org.xml.sax.Attributes;
-import org.xml.sax.helpers.DefaultHandler;
-import org.xml.sax.XMLReader;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+
 import javax.xml.parsers.SAXParser;
 import javax.xml.parsers.SAXParserFactory;
 
-import java.util.Map;
-import java.util.HashMap;
-import java.util.TreeMap;
-import java.io.FileWriter;
+import org.xml.sax.Attributes;
+import org.xml.sax.SAXException;
+import org.xml.sax.helpers.DefaultHandler;
 
-public class LetraE {
+public class LetraE extends DefaultHandler {
+
+    private Map<Integer, Integer> categoryFilmCount = new HashMap<>();
+    private Map<Integer, String> categoryNames = new HashMap<>();
+    private boolean isCategory = false;
+    private boolean isFilmCategory = false;
+
+    @Override
+    public void startElement(String uri, String localName, String qName, Attributes attributes) throws SAXException {
+        if (qName.equalsIgnoreCase("category")) {
+            setCategory(true);
+            String id = attributes.getValue("id");
+            String name = attributes.getValue("name");
+            categoryNames.put(Integer.parseInt(id), name);
+        } else if (qName.equalsIgnoreCase("film_category")) {
+            isFilmCategory = true;
+            String categoryId = attributes.getValue("category_id");
+
+            // Agora incrementa o contador de filmes para a categoria
+            int categoryIdInt = Integer.parseInt(categoryId);
+            categoryFilmCount.put(categoryIdInt, categoryFilmCount.getOrDefault(categoryIdInt, 0) + 1);
+        }
+    }
+
+    @Override
+    public void endElement(String uri, String localName, String qName) throws SAXException {
+        if (qName.equalsIgnoreCase("film_category") && isFilmCategory) {
+            // Quando encontramos uma tag <film_category>, contamos um filme para a
+            // categoria associada
+            isFilmCategory = false;
+        }
+    }
+
+    public boolean isCategory() {
+        return isCategory;
+    }
+
+    public void setCategory(boolean isCategory) {
+        this.isCategory = isCategory;
+    }
+
+    public Map<Integer, Integer> getCategoryFilmCount() {
+        return categoryFilmCount;
+    }
+
+    public Map<Integer, String> getCategoryNames() {
+        return categoryNames;
+    }
 
     public static void main(String[] args) {
         try {
-            // Usar TreeMap para manter as categorias em ordem alfabética automaticamente
-            Map<String, Integer> categoryCount = new TreeMap<>();
-            Map<String, String> categoryNames = new HashMap<>();
-
-            // Leitura do category.xml para associar id ao nome das categorias
+            // Criando o parser SAX
             SAXParserFactory factory = SAXParserFactory.newInstance();
             SAXParser saxParser = factory.newSAXParser();
-            XMLReader categoryReader = saxParser.getXMLReader();
 
-            categoryReader.setContentHandler(new DefaultHandler() {
-                @Override
-                public void startElement(String uri, String localName, String qName, Attributes attributes) {
-                    if (qName.equals("category")) {
-                        String id = attributes.getValue("id");
-                        String name = attributes.getValue("name");
-                        categoryNames.put(id, name); // Mapeia id -> nome
-                    }
-                }
-            });
-            categoryReader.parse("category.xml");
+            // Criando o handler para processar o XML
+            LetraE handler = new LetraE();
 
-            // Inicializa contagem com 0 para cada categoria no TreeMap
-            categoryNames.values().forEach(name -> categoryCount.put(name, 0));
+            // Caminho para o arquivo XML de categorias e film_categories
+            File categoriesFile = new File("category.xml");
+            File filmCategoriesFile = new File("film_category.xml");
 
-            // Leitura do film_category.xml para contar os filmes por categoria
-            XMLReader filmCategoryReader = saxParser.getXMLReader();
-            filmCategoryReader.setContentHandler(new DefaultHandler() {
-                @Override
-                public void startElement(String uri, String localName, String qName, Attributes attributes) {
-                    if (qName.equals("film_category")) {
-                        String categoryId = attributes.getValue("category_id");
-                        String categoryName = categoryNames.get(categoryId);
-                        categoryCount.put(categoryName, categoryCount.get(categoryName) + 1); // Incrementa a contagem
-                    }
-                }
-            });
-            filmCategoryReader.parse("film_category.xml");
+            // Parse para o primeiro arquivo (categories.xml)
+            saxParser.parse(categoriesFile, handler);
+            // Parse para o segundo arquivo (film_category.xml)
+            saxParser.parse(filmCategoriesFile, handler);
 
-            // Gerar HTML para a tabela
-            try (FileWriter htmlWriter = new FileWriter("resolucaoQuestaoE.html")) {
-                htmlWriter.write("<html>\n");
-                htmlWriter.write("<head>\n<title>Relatório de Categorias</title>\n</head>\n");
-                htmlWriter.write("<body>\n");
-                htmlWriter.write("<table border=\"1\">\n");
-                htmlWriter.write("\t<thead>\n");
-                htmlWriter.write("\t\t<tr>\n");
-                htmlWriter.write("\t\t\t<th>Categoria</th>\n");
-                htmlWriter.write("\t\t\t<th>Quantidade</th>\n");
-                htmlWriter.write("\t\t</tr>\n");
-                htmlWriter.write("\t</thead>\n");
-                htmlWriter.write("\t<tbody>\n");
+            // Obtendo os dados
+            Map<Integer, Integer> filmCounts = handler.getCategoryFilmCount();
+            Map<Integer, String> categoryNames = handler.getCategoryNames();
 
-                for (Map.Entry<String, Integer> entry : categoryCount.entrySet()) {
-                    htmlWriter.write("\t\t<tr>\n");
-                    htmlWriter.write("\t\t\t<td>" + entry.getKey() + "</td>\n");
-                    htmlWriter.write("\t\t\t<td>" + entry.getValue() + "</td>\n");
-                    htmlWriter.write("\t\t</tr>\n");
-                }
+            // Gerando o HTML com a tabela
+            StringBuilder htmlContent = new StringBuilder();
+            htmlContent.append("<html>\n")
+                    .append("<head><title>Letra E</title></head>\n")
+                    .append("<body>\n")
+                    .append("<table border='1'>\n")
+                    .append("<thead>\n")
+                    .append("<tr>\n")
+                    .append("<th>Categoria</th>\n")
+                    .append("<th>Quantidade</th>\n")
+                    .append("</tr>\n")
+                    .append("</thead>\n")
+                    .append("<tbody>\n");
 
-                htmlWriter.write("\t</tbody>\n");
-                htmlWriter.write("</table>\n");
-                htmlWriter.write("</body>\n");
-                htmlWriter.write("</html>\n");
+            for (Integer categoryId : categoryNames.keySet()) {
+                String categoryName = categoryNames.get(categoryId);
+                int filmCount = filmCounts.getOrDefault(categoryId, 0);
+                htmlContent.append("<tr>\n")
+                        .append("<td>").append(categoryName).append("</td>\n")
+                        .append("<td>").append(filmCount).append("</td>\n")
+                        .append("</tr>\n");
             }
 
-            System.out.println("HTML gerado com sucesso em: resolucaoQuestaoE.html");
+            htmlContent.append("</tbody>\n")
+                    .append("</table>\n")
+                    .append("</body>\n")
+                    .append("</html>");
+
+            // Escrevendo o HTML em um arquivo
+            try (FileWriter writer = new FileWriter("src/main/java/br/edu/ifpe/discente/ldd/nathy/html/letraE.html")) {
+                writer.write(htmlContent.toString());
+                System.out.println("Arquivo HTML gerado com sucesso!");
+            } catch (IOException e) {
+                System.err.println("Erro ao escrever o arquivo: " + e.getMessage());
+            }
 
         } catch (Exception e) {
             e.printStackTrace();
         }
+
     }
+
 }

@@ -1,86 +1,109 @@
 package br.edu.ifpe.discente.ldd.nathy.questions;
 
-import org.w3c.dom.*;
-import javax.xml.parsers.*;
 import java.io.File;
 import java.io.FileWriter;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
 
 public class LetraF {
+
     public static void main(String[] args) {
         try {
-            // Usar TreeMap para manter as categorias e os filmes em ordem alfabética automaticamente
-            Map<String, String> categoryMap = new TreeMap<>();
-            Map<String, String> filmMap = new TreeMap<>();
-            Map<String, String> filmCategoryMap = new TreeMap<>();
-
-            // 1. Ler category.xml para preencher o Map categoryMap
+            // Parse dos arquivos XML
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
             DocumentBuilder builder = factory.newDocumentBuilder();
-            Document categoryDoc = builder.parse(new File("category.xml"));
-            NodeList categories = categoryDoc.getElementsByTagName("category");
+
+            // Carregar os arquivos XML de filmes e categorias
+            Document filmDocument = builder.parse(new File("film.xml"));
+            Document categoryDocument = builder.parse(new File("category.xml"));
+            Document filmCategoryDocument = builder.parse(new File("film_category.xml"));
+
+            // Obter todos os filmes e suas informações
+            NodeList films = filmDocument.getElementsByTagName("film");
+            NodeList categories = categoryDocument.getElementsByTagName("category");
+            NodeList filmCategories = filmCategoryDocument.getElementsByTagName("film_category");
+
+            // Map para associar o id da categoria com o nome da categoria
+            Map<Integer, String> categoryMap = new HashMap<>();
+            // Map para associar o id do filme com suas categorias
+            Map<Integer, List<Integer>> filmToCategories = new HashMap<>();
+
+            // Preencher o map de categorias
             for (int i = 0; i < categories.getLength(); i++) {
-                Element category = (Element) categories.item(i);
-                String id = category.getAttribute("id");
-                String name = category.getAttribute("name");
-                categoryMap.put(id, name);
+                Element categoryElement = (Element) categories.item(i);
+                int categoryId = Integer.parseInt(categoryElement.getAttribute("id"));
+                String categoryName = categoryElement.getAttribute("name");
+                categoryMap.put(categoryId, categoryName);
             }
 
-            // 2. Ler film.xml para preencher o Map filmMap
-            Document filmDoc = builder.parse(new File("film.xml"));
-            NodeList films = filmDoc.getElementsByTagName("film");
-            for (int i = 0; i < films.getLength(); i++) {
-                Element film = (Element) films.item(i);
-                String id = film.getAttribute("id");
-                String title = film.getAttribute("title");
-                filmMap.put(id, title);
-            }
-
-            // 3. Ler film_category.xml para preencher o Map filmCategoryMap
-            Document filmCategoryDoc = builder.parse(new File("film_category.xml"));
-            NodeList filmCategories = filmCategoryDoc.getElementsByTagName("film_category");
+            // Preencher o map de filmes e suas categorias
             for (int i = 0; i < filmCategories.getLength(); i++) {
-                Element filmCategory = (Element) filmCategories.item(i);
-                String filmId = filmCategory.getAttribute("film_id");
-                String categoryId = filmCategory.getAttribute("category_id");
-                filmCategoryMap.put(filmId, categoryId);
+                Element filmCategoryElement = (Element) filmCategories.item(i);
+                int filmId = Integer.parseInt(filmCategoryElement.getAttribute("film_id"));
+                int categoryId = Integer.parseInt(filmCategoryElement.getAttribute("category_id"));
+
+                // Relaciona o filme com sua(s) categoria(s)
+                filmToCategories
+                        .computeIfAbsent(filmId, k -> new ArrayList<>())
+                        .add(categoryId);
             }
 
-            // 4. Gerar o HTML em ordem alfabética
-            try (FileWriter htmlWriter = new FileWriter("resolucaoQuestaoF.html")) {
-                htmlWriter.write("<html>\n");
-                htmlWriter.write("<head>\n<title>Relatório de Filmes e Categorias</title>\n</head>\n");
-                htmlWriter.write("<body>\n");
-                htmlWriter.write("<table border=\"1\">\n");
-                htmlWriter.write("\t<thead>\n");
-                htmlWriter.write("\t\t<tr>\n");
-                htmlWriter.write("\t\t\t<th>Filme</th>\n");
-                htmlWriter.write("\t\t\t<th>Categoria</th>\n");
-                htmlWriter.write("\t\t</tr>\n");
-                htmlWriter.write("\t</thead>\n");
-                htmlWriter.write("\t<tbody>\n");
+            // Gerar o conteúdo HTML para a tabela
+            StringBuilder htmlContent = new StringBuilder();
+            htmlContent.append("<html>\n")
+                    .append("<head><title>Filmes e Categorias</title></head>\n")
+                    .append("<body>\n")
+                    .append("<table border='1'>\n")
+                    .append("<thead>\n")
+                    .append("<tr>\n")
+                    .append("<th>Filme</th>\n")
+                    .append("<th>Categoria</th>\n")
+                    .append("</tr>\n")
+                    .append("</thead>\n")
+                    .append("<tbody>\n");
 
-                for (Map.Entry<String, String> entry : filmCategoryMap.entrySet()) {
-                    String filmId = entry.getKey();
-                    String categoryId = entry.getValue();
-                    String filmName = filmMap.get(filmId);
-                    String categoryName = categoryMap.get(categoryId);
+            // Para cada filme no arquivo films.xml, obtém suas categorias associadas
+            for (int i = 0; i < films.getLength(); i++) {
+                Element filmElement = (Element) films.item(i);
+                int filmId = Integer.parseInt(filmElement.getAttribute("id"));
+                String filmTitle = filmElement.getAttribute("title");
 
-                    htmlWriter.write("\t\t<tr>\n");
-                    htmlWriter.write("\t\t\t<td>" + filmName + "</td>\n");
-                    htmlWriter.write("\t\t\t<td>" + categoryName + "</td>\n");
-                    htmlWriter.write("\t\t</tr>\n");
+                // Obter as categorias do filme a partir do map de relacionamentos
+                List<Integer> categoryIds = filmToCategories.getOrDefault(filmId, Collections.emptyList());
+                for (int categoryId : categoryIds) {
+                    String categoryName = categoryMap.getOrDefault(categoryId, "Unknown Category");
+
+                    // Gerar uma linha da tabela para cada filme e categoria
+                    htmlContent.append("<tr>\n")
+                            .append("<td>").append(filmTitle).append("</td>\n")
+                            .append("<td>").append(categoryName).append("</td>\n")
+                            .append("</tr>\n");
                 }
-
-                htmlWriter.write("\t</tbody>\n");
-                htmlWriter.write("</table>\n");
-                htmlWriter.write("</body>\n");
-                htmlWriter.write("</html>\n");
             }
 
-            System.out.println("HTML gerado com sucesso em: resolucaoQuestaoF.html");
+            htmlContent.append("</tbody>\n")
+                    .append("</table>\n")
+                    .append("</body>\n")
+                    .append("</html>");
 
+            // Escrever o conteúdo HTML gerado em um arquivo
+            try (FileWriter writer = new FileWriter("src/main/java/br/edu/ifpe/discente/ldd/nathy/html/letraF.html")) {
+                writer.write(htmlContent.toString());
+                System.out.println("Arquivo HTML gerado com sucesso!");
+            } catch (IOException e) {
+                System.err.println("Erro ao escrever o arquivo HTML: " + e.getMessage());
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
